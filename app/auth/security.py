@@ -6,7 +6,8 @@ from passlib.context import CryptContext
 
 from app.config import get_settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use pbkdf2_sha256 to avoid bcrypt backend issues on some platforms
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 settings = get_settings()
 
@@ -54,5 +55,3 @@ def decode_access_token(token: str) -> Dict[str, Any]:
     except JWTError as exc:
         raise JWTError("Could not validate credentials") from exc
     return payload
-
-
