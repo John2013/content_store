@@ -1,5 +1,5 @@
 from functools import lru_cache
-from pydantic import BaseSettings, AnyUrl
+from pydantic import AnyUrl, BaseSettings
 
 
 class Settings(BaseSettings):
@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "cursor_test"
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "1"
+
+    # Auth / security
+    SECRET_KEY: str = "CHANGE_ME_SECRET_KEY"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     @property
     def database_url_async(self) -> AnyUrl:

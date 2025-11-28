@@ -1,4 +1,4 @@
-from app.user import models, schemas, crud
+from app.user import crud, models, schemas
 
 __all__ = ["models", "schemas", "crud"]
 
