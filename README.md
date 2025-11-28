@@ -1,4 +1,4 @@
-## cursor-test FastAPI app
+## Content store FastAPI app
 
 Простой пример FastAPI-приложения с:
 - **async PostgreSQL** (SQLAlchemy + asyncpg)
