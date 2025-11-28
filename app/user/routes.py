@@ -19,7 +19,9 @@ router = APIRouter(prefix="/users", tags=["users"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
 
 
-@router.post("/register", response_model=schemas.UserRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register", response_model=schemas.UserRead, status_code=status.HTTP_201_CREATED
+)
 async def register_user(
     user_in: schemas.UserCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -32,7 +34,9 @@ async def register_user(
         )
 
     hashed_password = get_password_hash(user_in.password)
-    user = await crud.create_user(db, email=user_in.email, hashed_password=hashed_password)
+    user = await crud.create_user(
+        db, email=user_in.email, hashed_password=hashed_password
+    )
     return schemas.UserRead.model_validate(user)
 
 
@@ -83,5 +87,3 @@ async def read_current_user(
     current_user: Annotated[schemas.UserRead, Depends(get_current_user)],
 ) -> schemas.UserRead:
     return current_user
-
-

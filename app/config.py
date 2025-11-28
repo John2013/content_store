@@ -1,6 +1,7 @@
 from functools import lru_cache
-from pydantic import AnyUrl, BaseSettings
+from pydantic import AnyUrl
 
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     POSTGRES_HOST: str = "localhost"
@@ -15,15 +16,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     @property
-    def database_url_async(self) -> AnyUrl:
+    def database_url_async(self) -> str:
         # asyncpg + SQLAlchemy URL
-        return AnyUrl.build(
-            scheme="postgresql+asyncpg",
-            host=self.POSTGRES_HOST,
-            port=self.POSTGRES_PORT,
-            user=self.POSTGRES_USER,
-            password=self.POSTGRES_PASSWORD,
-            path=f"/{self.POSTGRES_DB}",
+        return (
+            f"postgresql+asyncpg://{self.POSTGRES_USER}:"
+            f"{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:"
+            f"{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
     class Config:

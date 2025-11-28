@@ -1,5 +1,3 @@
 """
 Application package root.
 """
-
-

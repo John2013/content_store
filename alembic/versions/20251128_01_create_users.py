@@ -22,9 +22,16 @@ def upgrade() -> None:
     op.create_table(
         "users",
         sa.Column("id", sa.Integer, primary_key=True, index=True),
-        sa.Column("email", sa.String(length=320), nullable=False, unique=True, index=True),
+        sa.Column(
+            "email", sa.String(length=320), nullable=False, unique=True, index=True
+        ),
         sa.Column("hashed_password", sa.String(length=256), nullable=False),
-        sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.sql.expression.true()),
+        sa.Column(
+            "is_active",
+            sa.Boolean,
+            nullable=False,
+            server_default=sa.sql.expression.true(),
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -42,5 +49,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("users")
-
-

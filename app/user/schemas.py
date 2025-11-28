@@ -26,4 +26,3 @@ class UserRead(UserBase):
 
 class UserInDB(UserRead):
     hashed_password: str
-

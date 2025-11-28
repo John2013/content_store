@@ -9,7 +9,7 @@ settings = get_settings()
 
 engine = create_async_engine(
     str(settings.database_url_async),
-    echo=False,          # можно True для отладки SQL
+    echo=False,  # можно True для отладки SQL
     future=True,
 )
 

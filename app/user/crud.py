@@ -33,4 +33,3 @@ async def create_user(
         raise
     await db.refresh(user)
     return user
-
