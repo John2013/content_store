@@ -1,7 +1,7 @@
 [project]
-name = "cursor-test"
+name = "content-store"
 version = "0.1.0"
-description = "Add your description here"
+description = "Simple marketplace on FastAPI"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
