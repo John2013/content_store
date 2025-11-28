@@ -56,10 +56,31 @@ uvicorn app.main:app --reload
 - Swagger UI: `http://localhost:8000/docs`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 
-### 5. Базовые endpoint'ы
+### 5. API Endpoints
 
+#### Публичные (без авторизации):
 - `POST /api/users/register` — регистрация пользователя (email + password).
 - `POST /api/users/login` — логин, выдаёт JWT (`access_token`).
-- `GET /api/users/me` — вернуть текущего пользователя (нужен `Authorization: Bearer <token>`).
+
+#### Защищённые (требуют `Authorization: Bearer <token>`):
+- `GET /api/users/me` — получить данные текущего пользователя.
+- `GET /api/users/` — получить список всех пользователей.
+- `GET /api/users/{user_id}` — получить пользователя по ID.
+- `PUT /api/users/{user_id}` — обновить пользователя (email, is_active).
+- `DELETE /api/users/{user_id}` — удалить пользователя.
+
+### 6. Тестирование
+
+Запуск тестов:
+
+```bash
+pytest -q
+```
+
+Тесты покрывают:
+- Регистрацию и авторизацию
+- Защищённые эндпоинты (требующие JWT токен)
+- CRUD операции с пользователями
+- Обработку ошибок (404, 401)
 
 

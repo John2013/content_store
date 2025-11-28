@@ -26,3 +26,7 @@ class UserRead(UserBase):
 
 class UserInDB(UserRead):
     hashed_password: str
+
+
+class UserUpdate(UserBase):
+    is_active: bool = Field(default=True)

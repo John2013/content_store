@@ -82,8 +82,51 @@ async def get_current_user(
     return schemas.UserRead.model_validate(user)
 
 
+@router.get("/")
+async def get_users(
+    current_user: Annotated[schemas.UserRead, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[schemas.UserRead]:
+    return await crud.get_users(db)
+
+
 @router.get("/me", response_model=schemas.UserRead)
 async def read_current_user(
     current_user: Annotated[schemas.UserRead, Depends(get_current_user)],
 ) -> schemas.UserRead:
     return current_user
+
+
+@router.get("/{user_id:int}", response_model=schemas.UserRead)
+async def get_user(
+    user_id: int,
+    current_user: Annotated[schemas.UserRead, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> schemas.UserRead:
+    user = await crud.get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    return schemas.UserRead.model_validate(user)
+
+
+@router.put("/{user_id:int}", response_model=schemas.UserRead)
+async def update_user(
+    user_id: int,
+    user_in: schemas.UserUpdate,
+    current_user: Annotated[schemas.UserRead, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> schemas.UserRead:
+    user = await crud.update_user(db, user_id, user_in)
+    return schemas.UserRead.model_validate(user)
+
+
+@router.delete("/{user_id:int}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: int,
+    current_user: Annotated[schemas.UserRead, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    await crud.delete_user(db, user_id)
+    return None
