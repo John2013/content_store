@@ -5,8 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.17.2",
     "asyncpg>=0.31.0",
+    "dotenv>=0.9.9",
     "fastapi[standard]>=0.122.0",
+    "passlib>=1.7.4",
+    "python-jose>=3.5.0",
     "ruff>=0.14.6",
     "sqlalchemy>=2.0.44",
 ]
