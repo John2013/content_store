@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any, Coroutine, Sequence
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -25,8 +25,14 @@ async def create_user(
     email: str,
     hashed_password: str,
     is_active: bool = True,
+    is_staff: bool = False,
 ) -> User:
-    user = User(email=email, hashed_password=hashed_password, is_active=is_active)
+    user = User(
+        email=email,
+        hashed_password=hashed_password,
+        is_active=is_active,
+        is_staff=is_staff,
+    )
     db.add(user)
     try:
         await db.commit()
@@ -37,7 +43,7 @@ async def create_user(
     return user
 
 
-async def get_users(db: AsyncSession) -> list[User]:
+async def get_users(db: AsyncSession) -> Sequence[User]:
     result = await db.execute(select(User))
     return result.scalars().all()
 
