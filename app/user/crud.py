@@ -1,4 +1,4 @@
-from typing import Optional, Any, Coroutine, Sequence
+from typing import Optional, Sequence
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -61,6 +61,32 @@ async def update_user(
     user.email = user_in.email
     user.is_active = user_in.is_active
     db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def patch_user(
+    db: AsyncSession,
+    user_id: int,
+    user_in: schemas.UserPatch,
+) -> User:
+    user = await get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    user_fields = user_in.model_dump(exclude_unset=True)
+    user_changed = False
+    for field, value in user_fields.items():
+        if value is not None:
+            setattr(user, field, value)
+            db.add(user)
+            user_changed = True
+    if not user_changed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No changes made"
+        )
     await db.commit()
     await db.refresh(user)
     return user

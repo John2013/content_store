@@ -5,7 +5,6 @@ from pydantic import BaseModel, EmailStr, Field
 
 class UserBase(BaseModel):
     email: EmailStr
-    is_staff: bool
 
 
 class UserCreate(UserBase):
@@ -19,6 +18,7 @@ class UserLogin(UserBase):
 class UserRead(UserBase):
     id: int
     is_active: bool
+    is_staff: bool
     created_at: datetime
     updated_at: datetime
 
@@ -31,3 +31,10 @@ class UserInDB(UserRead):
 
 class UserUpdate(UserBase):
     is_active: bool = Field(default=True)
+    is_staff: bool = Field(default=False)
+
+
+class UserPatch(UserBase):
+    email: str | None = None
+    is_active: bool | None = None
+    is_staff: bool | None = None

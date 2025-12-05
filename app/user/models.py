@@ -27,3 +27,6 @@ class User(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+    def __str__(self) -> str:
+        return f"<User {self.email}>"

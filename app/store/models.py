@@ -40,6 +40,9 @@ class Category(Base):
         "Product", back_populates="category", cascade="all, delete-orphan"
     )
 
+    def __str__(self):
+        return f"<Category {self.id}: {self.name}>"
+
 
 class Product(Base):
     __tablename__ = "products"
@@ -51,9 +54,6 @@ class Product(Base):
     content_text: Mapped[str] = mapped_column(Text, nullable=False)
     category_id: Mapped[int] = mapped_column(
         ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    seller_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -72,7 +72,6 @@ class Product(Base):
     category: Mapped[Optional["Category"]] = relationship(
         "Category", back_populates="products"
     )
-    seller: Mapped[User] = relationship("User")
     cart_items: Mapped[list["CartItem"]] = relationship(
         "CartItem", back_populates="product", cascade="all, delete-orphan"
     )
@@ -87,6 +86,9 @@ class Product(Base):
     )
 
     __table_args__ = (Index("idx_product_category_active", "category_id", "is_active"),)
+
+    def __str__(self):
+        return f"<Product {self.id}: {self.title}>"
 
 
 class CartItem(Base):
@@ -114,6 +116,9 @@ class CartItem(Base):
     product: Mapped["Product"] = relationship("Product", back_populates="cart_items")
 
     __table_args__ = (Index("idx_cart_user_session", "user_id", "session_id"),)
+
+    def __str__(self):
+        return f"<CartItem {self.id}: {self.product.title} x {self.quantity}>"
 
 
 class Order(Base):
@@ -151,6 +156,9 @@ class Order(Base):
         "Purchase", back_populates="order", cascade="all, delete-orphan"
     )
 
+    def __str__(self):
+        return f"<Order {self.id}>"
+
 
 class OrderItem(Base):
     __tablename__ = "order_items"
@@ -168,6 +176,9 @@ class OrderItem(Base):
     # Relationships
     order: Mapped["Order"] = relationship("Order", back_populates="order_items")
     product: Mapped["Product"] = relationship("Product", back_populates="order_items")
+
+    def __str__(self):
+        return f"<OrderItem {self.id}>"
 
 
 class Purchase(Base):
@@ -196,6 +207,9 @@ class Purchase(Base):
 
     __table_args__ = (Index("idx_purchase_user_product", "user_id", "product_id"),)
 
+    def __str__(self):
+        return f"<Purchase {self.id}>"
+
 
 class Review(Base):
     __tablename__ = "reviews"
@@ -220,3 +234,6 @@ class Review(Base):
     product: Mapped["Product"] = relationship("Product", back_populates="reviews")
 
     __table_args__ = (Index("idx_review_user_product", "user_id", "product_id"),)
+
+    def __str__(self):
+        return f"<Review {self.id}>"

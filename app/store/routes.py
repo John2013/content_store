@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.store import crud, schemas
-from app.user.routes import get_current_user
+from app.user.routes import get_current_user, get_current_user_or_none
 from app.user import schemas as user_schemas
 
 router = APIRouter(prefix="/store", tags=["store"])
@@ -22,6 +22,100 @@ async def get_categories(
     return [schemas.CategoryRead.model_validate(c) for c in categories]
 
 
+@router.post(
+    "/categories",
+    response_model=schemas.CategoryRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_category(
+    category_in: schemas.CategoryCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
+) -> schemas.CategoryRead:
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You are not authorized to create categories",
+        )
+    if not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to create categories",
+        )
+    category = await crud.create_category(
+        db, category_in=category_in, current_user=current_user
+    )
+    return schemas.CategoryRead.model_validate(category)
+
+
+@router.delete("/categories", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_category(
+    category_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
+) -> None:
+    """Delete own category. Requires authentication."""
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You are not authorized to delete categories",
+        )
+    if not current_user or not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to delete categories",
+        )
+    await crud.delete_category(db, category_id=category_id, current_user=current_user)
+
+
+@router.post(
+    "/products",
+    response_model=schemas.ProductRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_product(
+    product_in: schemas.ProductCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
+) -> schemas.ProductRead:
+    """Create a new product. Requires staff privileges."""
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You are not authorized to create products",
+        )
+    if not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to create products",
+        )
+    product = await crud.create_product(db, product_in=product_in)
+    return schemas.ProductRead.model_validate(product)
+
+
+@router.delete(
+    "/products/{product_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_product(
+    product_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
+) -> None:
+    """Delete a product. Requires staff privileges."""
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You are not authorized to delete products",
+        )
+    if not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to delete products",
+        )
+    await crud.delete_product(db, product_id=product_id)
+
+
 @router.get("/products", response_model=list[schemas.ProductRead])
 async def get_products(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -29,7 +123,7 @@ async def get_products(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
 ) -> list[schemas.ProductRead]:
-    """Get list of products with optional category filter."""
+    """Get list of all active products with optional category filter."""
     products = await crud.get_products(
         db, category_id=category_id, skip=skip, limit=limit
     )
@@ -72,12 +166,10 @@ async def get_product_reviews(
 @router.get("/cart", response_model=list[schemas.CartItemRead])
 async def get_cart(
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead | None = Depends(get_current_user),
     session_id: Optional[str] = Query(
         None, description="Session ID for anonymous cart"
     ),
-    current_user: Optional[
-        Annotated[user_schemas.UserRead, Depends(get_current_user)]
-    ] = None,
 ) -> list[schemas.CartItemRead]:
     """Get cart items. Requires either authentication or session_id."""
     user_id = current_user.id if current_user else None
@@ -96,9 +188,7 @@ async def get_cart(
 async def add_to_cart(
     item_in: schemas.CartItemCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Optional[
-        Annotated[user_schemas.UserRead, Depends(get_current_user)]
-    ] = None,
+    current_user: user_schemas.UserRead | None = Depends(get_current_user_or_none),
 ) -> schemas.CartItemRead:
     """Add item to cart. Requires either authentication or session_id in request."""
     user_id = current_user.id if current_user else None
@@ -130,12 +220,10 @@ async def remove_from_cart(
 @router.delete("/cart", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_cart(
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
     session_id: Optional[str] = Query(
         None, description="Session ID for anonymous cart"
     ),
-    current_user: Optional[
-        Annotated[user_schemas.UserRead, Depends(get_current_user)]
-    ] = None,
 ) -> None:
     """Clear cart. Requires either authentication or session_id."""
     user_id = current_user.id if current_user else None
@@ -153,8 +241,8 @@ async def clear_cart(
 )
 async def create_order(
     order_in: schemas.OrderCreate,
-    current_user: Annotated[user_schemas.UserRead, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> schemas.OrderRead:
     """Create order from cart. Requires authentication."""
     order = await crud.create_order_from_cart(
@@ -165,8 +253,8 @@ async def create_order(
 
 @router.get("/orders", response_model=list[schemas.OrderRead])
 async def get_orders(
-    current_user: Annotated[user_schemas.UserRead, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
 ) -> list[schemas.OrderRead]:
@@ -180,8 +268,8 @@ async def get_orders(
 @router.get("/orders/{order_id}", response_model=schemas.OrderRead)
 async def get_order(
     order_id: int,
-    current_user: Annotated[user_schemas.UserRead, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> schemas.OrderRead:
     """Get order details. Requires authentication."""
     order = await crud.get_order_by_id(db, order_id)
@@ -200,8 +288,8 @@ async def get_order(
 @router.post("/orders/{order_id}/pay", response_model=schemas.OrderRead)
 async def pay_order(
     order_id: int,
-    current_user: Annotated[user_schemas.UserRead, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> schemas.OrderRead:
     """Simulate payment for order. Requires authentication."""
     order = await crud.get_order_by_id(db, order_id)
@@ -229,8 +317,8 @@ async def pay_order(
 # Purchase endpoints (require authentication)
 @router.get("/purchases", response_model=list[schemas.PurchaseRead])
 async def get_purchases(
-    current_user: Annotated[user_schemas.UserRead, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
 ) -> list[schemas.PurchaseRead]:
@@ -246,8 +334,8 @@ async def get_purchases(
 )
 async def get_purchase_content(
     order_id: int,
-    current_user: Annotated[user_schemas.UserRead, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> list[schemas.PurchaseContentRead]:
     """Get content text for purchased products. Requires authentication."""
     # Verify order belongs to user
@@ -282,8 +370,8 @@ async def get_purchase_content(
 async def create_review(
     product_id: int,
     review_in: schemas.ReviewCreate,
-    current_user: Annotated[user_schemas.UserRead, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> schemas.ReviewRead:
     """Create review for a product. Requires authentication and purchase."""
     # Check if product exists
@@ -303,8 +391,8 @@ async def create_review(
 async def update_review(
     review_id: int,
     review_in: schemas.ReviewUpdate,
-    current_user: Annotated[user_schemas.UserRead, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> schemas.ReviewRead:
     """Update own review. Requires authentication."""
     review = await crud.update_review(
@@ -316,8 +404,8 @@ async def update_review(
 @router.delete("/reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_review(
     review_id: int,
-    current_user: Annotated[user_schemas.UserRead, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> None:
     """Delete own review. Requires authentication."""
     await crud.delete_review(db, review_id=review_id, user_id=current_user.id)

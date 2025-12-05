@@ -19,6 +19,45 @@ router = APIRouter(prefix="/users", tags=["users"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/users/login")
 
 
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> schemas.UserRead:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = decode_access_token(token)
+        sub = payload.get("sub")
+        if sub is None:
+            raise credentials_exception
+        user_id = int(sub)
+    except (JWTError, ValueError):
+        raise credentials_exception
+
+    user = await crud.get_user_by_id(db, user_id)
+    if user is None:
+        raise credentials_exception
+    return schemas.UserRead.model_validate(user)
+
+
+def require_staff(
+    current_user: schemas.UserRead = Depends(get_current_user),
+) -> schemas.UserRead:
+    """
+    Dependency that requires the current user to be a staff member.
+    """
+    if not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Staff privileges required",
+        )
+    return current_user
+
+
 @router.post(
     "/register", response_model=schemas.UserRead, status_code=status.HTTP_201_CREATED
 )
@@ -57,37 +96,28 @@ async def login_for_access_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> schemas.UserRead:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
+async def get_current_user_or_none(
+    token: str | None = Depends(
+        OAuth2PasswordBearer(tokenUrl="/api/users/login", auto_error=False)
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> schemas.UserRead | None:
+    if not token:
+        return None
     try:
-        payload = decode_access_token(token)
-        sub = payload.get("sub")
-        if sub is None:
-            raise credentials_exception
-        user_id = int(sub)
-    except (JWTError, ValueError):
-        raise credentials_exception
-
-    user = await crud.get_user_by_id(db, user_id)
-    if user is None:
-        raise credentials_exception
-    return schemas.UserRead.model_validate(user)
+        return await get_current_user(token, db)
+    except HTTPException:
+        return None
 
 
-@router.get("/")
+@router.get(
+    "/", response_model=list[schemas.UserRead], dependencies=[Depends(require_staff)]
+)
 async def get_users(
-    current_user: Annotated[schemas.UserRead, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: schemas.UserRead = Depends(get_current_user),
 ) -> list[schemas.UserRead]:
-    return await crud.get_users(db)
+    return [schemas.UserRead.model_validate(user) for user in await crud.get_users(db)]
 
 
 @router.get("/me", response_model=schemas.UserRead)
@@ -97,7 +127,22 @@ async def read_current_user(
     return current_user
 
 
-@router.get("/{user_id:int}", response_model=schemas.UserRead)
+@router.patch("/me", response_model=schemas.UserRead)
+async def update_current_user(
+    user_in: schemas.UserUpdate,
+    current_user: Annotated[schemas.UserRead, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> schemas.UserRead:
+    return schemas.UserRead.model_validate(
+        await crud.update_user(db, current_user.id, user_in)
+    )
+
+
+@router.get(
+    "/{user_id:int}",
+    response_model=schemas.UserRead,
+    dependencies=[Depends(require_staff)],
+)
 async def get_user(
     user_id: int,
     current_user: Annotated[schemas.UserRead, Depends(get_current_user)],
@@ -111,7 +156,11 @@ async def get_user(
     return schemas.UserRead.model_validate(user)
 
 
-@router.put("/{user_id:int}", response_model=schemas.UserRead)
+@router.put(
+    "/{user_id:int}",
+    response_model=schemas.UserRead,
+    dependencies=[Depends(require_staff)],
+)
 async def update_user(
     user_id: int,
     user_in: schemas.UserUpdate,
@@ -122,7 +171,26 @@ async def update_user(
     return schemas.UserRead.model_validate(user)
 
 
-@router.delete("/{user_id:int}", status_code=status.HTTP_204_NO_CONTENT)
+@router.patch(
+    "/{user_id:int}",
+    response_model=schemas.UserRead,
+    dependencies=[Depends(require_staff)],
+)
+async def patch_user(
+    user_id: int,
+    user_in: schemas.UserPatch,
+    current_user: Annotated[schemas.UserRead, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> schemas.UserRead:
+    user = await crud.patch_user(db, user_id, user_in)
+    return schemas.UserRead.model_validate(user)
+
+
+@router.delete(
+    "/{user_id:int}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_staff)],
+)
 async def delete_user(
     user_id: int,
     current_user: Annotated[schemas.UserRead, Depends(get_current_user)],

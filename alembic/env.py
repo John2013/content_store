@@ -24,7 +24,7 @@ from app.store.models import (  # noqa: E402, F401
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-config.set_main_option('sqlalchemy.url', Settings().database_url_async)
+config.set_main_option("sqlalchemy.url", Settings().database_url_async)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

@@ -51,7 +51,6 @@ class ProductRead(BaseModel):
     description: Optional[str]
     price: Decimal
     category_id: Optional[int]
-    seller_id: int
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -79,6 +78,7 @@ class CartItemRead(BaseModel):
     quantity: int
     created_at: datetime
     product: ProductRead
+    session_id: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -96,7 +96,7 @@ class OrderRead(BaseModel):
     payment_id: Optional[str]
     created_at: datetime
     updated_at: datetime
-    order_items: list["OrderItemRead"]
+    order_items: list["OrderItemRead"] = []
 
     model_config = {"from_attributes": True}
 
@@ -112,7 +112,7 @@ class OrderItemRead(BaseModel):
     product_id: int
     quantity: int
     price_at_purchase: Decimal
-    product: ProductRead
+    product: ProductRead | None = None
 
     model_config = {"from_attributes": True}
 
@@ -125,7 +125,7 @@ class PurchaseRead(BaseModel):
     product_id: int
     purchased_at: datetime
     product: ProductRead
-    order: OrderRead
+    order: OrderRead | None = None
 
     model_config = {"from_attributes": True}
 

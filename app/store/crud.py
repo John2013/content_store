@@ -2,32 +2,46 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.store import models, schemas
+from app.store import schemas
+from app.store.models import (
+    Order,
+    CartItem,
+    OrderItem,
+    Category,
+    Product,
+    Purchase,
+    Review,
+)
+from app.user import schemas as user_schemas
 
 
 # Category CRUD
-async def get_category_by_id(
-    db: AsyncSession, category_id: int
-) -> Optional[models.Category]:
-    result = await db.execute(
-        select(models.Category).where(models.Category.id == category_id)
-    )
+async def get_category_by_id(db: AsyncSession, category_id: int) -> Optional[Category]:
+    result = await db.execute(select(Category).where(Category.id == category_id))
     return result.scalar_one_or_none()
 
 
-async def get_categories(db: AsyncSession) -> list[models.Category]:
-    result = await db.execute(select(models.Category).order_by(models.Category.name))
+async def get_categories(db: AsyncSession) -> list[Category]:
+    result = await db.execute(select(Category).order_by(Category.name))
     return list(result.scalars().all())
 
 
 async def create_category(
-    db: AsyncSession, category_in: schemas.CategoryCreate
-) -> models.Category:
-    category = models.Category(**category_in.model_dump())
+    db: AsyncSession,
+    category_in: schemas.CategoryCreate,
+    current_user: user_schemas.UserRead,
+) -> Category:
+    if not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to create a category",
+        )
+    category = Category(**category_in.model_dump())
     db.add(category)
     try:
         await db.commit()
@@ -41,13 +55,26 @@ async def create_category(
     return category
 
 
+async def delete_category(
+    db: AsyncSession, category_id: int, current_user: user_schemas.UserRead
+) -> None:
+    if not current_user.is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to create a category",
+        )
+    category = await get_category_by_id(db, category_id)
+    if category is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="category not found"
+        )
+    await db.delete(category)
+    await db.commit()
+
+
 # Product CRUD
-async def get_product_by_id(
-    db: AsyncSession, product_id: int
-) -> Optional[models.Product]:
-    result = await db.execute(
-        select(models.Product).where(models.Product.id == product_id)
-    )
+async def get_product_by_id(db: AsyncSession, product_id: int) -> Optional[Product]:
+    result = await db.execute(select(Product).where(Product.id == product_id))
     return result.scalar_one_or_none()
 
 
@@ -56,19 +83,19 @@ async def get_products(
     category_id: Optional[int] = None,
     skip: int = 0,
     limit: int = 100,
-) -> list[models.Product]:
-    query = select(models.Product).where(models.Product.is_active)
+) -> list[Product]:
+    query = select(Product).where(Product.is_active)
     if category_id:
-        query = query.where(models.Product.category_id == category_id)
-    query = query.order_by(models.Product.created_at.desc()).offset(skip).limit(limit)
+        query = query.where(Product.category_id == category_id)
+    query = query.order_by(Product.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
     return list(result.scalars().all())
 
 
 async def create_product(
-    db: AsyncSession, product_in: schemas.ProductCreate, seller_id: int
-) -> models.Product:
-    product = models.Product(**product_in.model_dump(), seller_id=seller_id)
+    db: AsyncSession, product_in: schemas.ProductCreate
+) -> Product:
+    product = Product(**product_in.model_dump())
     db.add(product)
     try:
         await db.commit()
@@ -84,7 +111,7 @@ async def create_product(
 
 async def update_product(
     db: AsyncSession, product_id: int, product_in: schemas.ProductUpdate
-) -> models.Product:
+) -> Product:
     product = await get_product_by_id(db, product_id)
     if product is None:
         raise HTTPException(
@@ -112,27 +139,23 @@ async def delete_product(db: AsyncSession, product_id: int) -> None:
 # CartItem CRUD
 async def get_cart_items(
     db: AsyncSession, user_id: Optional[int] = None, session_id: Optional[str] = None
-) -> list[models.CartItem]:
-    query = select(models.CartItem)
+) -> list[CartItem]:
+    query = select(CartItem)
     conditions = []
     if user_id:
-        conditions.append(models.CartItem.user_id == user_id)
+        conditions.append(CartItem.user_id == user_id)
     if session_id:
-        conditions.append(models.CartItem.session_id == session_id)
+        conditions.append(CartItem.session_id == session_id)
     if conditions:
-        query = query.where(or_(*conditions))
+        query = query.options(selectinload(CartItem.product)).where(or_(*conditions))
     else:
         return []
-    result = await db.execute(query.order_by(models.CartItem.created_at.desc()))
+    result = await db.execute(query.order_by(CartItem.created_at.desc()))
     return list(result.scalars().all())
 
 
-async def get_cart_item_by_id(
-    db: AsyncSession, item_id: int
-) -> Optional[models.CartItem]:
-    result = await db.execute(
-        select(models.CartItem).where(models.CartItem.id == item_id)
-    )
+async def get_cart_item_by_id(db: AsyncSession, item_id: int) -> Optional[CartItem]:
+    result = await db.execute(select(CartItem).where(CartItem.id == item_id))
     return result.scalar_one_or_none()
 
 
@@ -142,7 +165,7 @@ async def add_to_cart(
     quantity: int = 1,
     user_id: Optional[int] = None,
     session_id: Optional[str] = None,
-) -> models.CartItem:
+) -> CartItem:
     # Check if product exists
     product = await get_product_by_id(db, product_id)
     if product is None:
@@ -155,11 +178,11 @@ async def add_to_cart(
         )
 
     # Check if item already in cart
-    query = select(models.CartItem).where(models.CartItem.product_id == product_id)
+    query = select(CartItem).where(CartItem.product_id == product_id)
     if user_id:
-        query = query.where(models.CartItem.user_id == user_id)
+        query = query.where(CartItem.user_id == user_id)
     elif session_id:
-        query = query.where(models.CartItem.session_id == session_id)
+        query = query.where(CartItem.session_id == session_id)
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -173,7 +196,7 @@ async def add_to_cart(
         existing_item.quantity += quantity
         db.add(existing_item)
     else:
-        cart_item = models.CartItem(
+        cart_item = CartItem(
             product_id=product_id,
             quantity=quantity,
             user_id=user_id,
@@ -200,12 +223,12 @@ async def remove_from_cart(db: AsyncSession, item_id: int) -> None:
 async def clear_cart(
     db: AsyncSession, user_id: Optional[int] = None, session_id: Optional[str] = None
 ) -> None:
-    query = select(models.CartItem)
+    query = select(CartItem)
     conditions = []
     if user_id:
-        conditions.append(models.CartItem.user_id == user_id)
+        conditions.append(CartItem.user_id == user_id)
     if session_id:
-        conditions.append(models.CartItem.session_id == session_id)
+        conditions.append(CartItem.session_id == session_id)
     if not conditions:
         return
     query = query.where(or_(*conditions))
@@ -217,18 +240,18 @@ async def clear_cart(
 
 
 # Order CRUD
-async def get_order_by_id(db: AsyncSession, order_id: int) -> Optional[models.Order]:
-    result = await db.execute(select(models.Order).where(models.Order.id == order_id))
+async def get_order_by_id(db: AsyncSession, order_id: int) -> Optional[Order]:
+    result = await db.execute(select(Order).where(Order.id == order_id))
     return result.scalar_one_or_none()
 
 
 async def get_user_orders(
     db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100
-) -> list[models.Order]:
+) -> list[Order]:
     result = await db.execute(
-        select(models.Order)
-        .where(models.Order.user_id == user_id)
-        .order_by(models.Order.created_at.desc())
+        select(Order)
+        .where(Order.user_id == user_id)
+        .order_by(Order.created_at.desc())
         .offset(skip)
         .limit(limit)
     )
@@ -236,64 +259,72 @@ async def get_user_orders(
 
 
 async def create_order_from_cart(
-    db: AsyncSession, user_id: int, session_id: Optional[str] = None
-) -> models.Order:
-    # Get cart items
-    cart_items = await get_cart_items(db, user_id=user_id, session_id=session_id)
-    if not cart_items:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Cart is empty"
+    db: AsyncSession, user_id: int, session_id: str = None
+) -> Order:
+    # Fetch cart items with products and their categories
+    cart_stmt = (
+        select(CartItem)
+        .where(
+            (CartItem.user_id == user_id)
+            if user_id
+            else (CartItem.session_id == session_id)
         )
+        .options(selectinload(CartItem.product).selectinload(Product.category))
+    )
+    cart_result = await db.execute(cart_stmt)
+    cart_items = cart_result.scalars().all()
 
-    # Calculate total
-    total_amount = Decimal("0")
-    order_items_data = []
-    for item in cart_items:
-        if not item.product.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Product {item.product.title} is not available",
-            )
-        item_total = item.product.price * item.quantity
-        total_amount += item_total
-        order_items_data.append(
-            {
-                "product_id": item.product_id,
-                "quantity": item.quantity,
-                "price_at_purchase": item.product.price,
-            }
-        )
+    if not cart_items:
+        raise ValueError("Cart is empty")
+
+    total_amount = Decimal(
+        sum(item.product.price * item.quantity for item in cart_items)
+    )
 
     # Create order
-    order = models.Order(user_id=user_id, total_amount=total_amount, status="pending")
+    order = Order(user_id=user_id, total_amount=total_amount)
     db.add(order)
-    await db.flush()  # Get order.id
+    await db.flush()
 
     # Create order items
-    for item_data in order_items_data:
-        order_item = models.OrderItem(order_id=order.id, **item_data)
+    for cart_item in cart_items:
+        order_item = OrderItem(
+            order_id=order.id,
+            product_id=cart_item.product_id,
+            quantity=cart_item.quantity,
+            price_at_purchase=cart_item.product.price,
+        )
         db.add(order_item)
 
-    # Create purchases
-    for item_data in order_items_data:
-        purchase = models.Purchase(
-            user_id=user_id,
-            order_id=order.id,
-            product_id=item_data["product_id"],
-        )
-        db.add(purchase)
+    # Remove cart items
+    delete_stmt = delete(CartItem).where(
+        (CartItem.user_id == user_id)
+        if user_id
+        else (CartItem.session_id == session_id)
+    )
+    await db.execute(delete_stmt)
 
-    # Clear cart
-    await clear_cart(db, user_id=user_id, session_id=session_id)
+    # Re-fetch order with full relationships eager-loaded
+    order_stmt = (
+        select(Order)
+        .where(Order.id == order.id)
+        .options(
+            selectinload(Order.order_items)
+            .selectinload(OrderItem.product)
+            .selectinload(Product.category),
+            selectinload(Order.user),
+        )
+    )
+    result = await db.execute(order_stmt)
+    order = result.scalar_one()
 
     await db.commit()
-    await db.refresh(order)
     return order
 
 
 async def update_order_status(
     db: AsyncSession, order_id: int, status: str, payment_id: Optional[str] = None
-) -> models.Order:
+) -> Order:
     order = await get_order_by_id(db, order_id)
     if order is None:
         raise HTTPException(
@@ -311,11 +342,12 @@ async def update_order_status(
 # Purchase CRUD
 async def get_user_purchases(
     db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100
-) -> list[models.Purchase]:
+) -> list[Purchase]:
     result = await db.execute(
-        select(models.Purchase)
-        .where(models.Purchase.user_id == user_id)
-        .order_by(models.Purchase.purchased_at.desc())
+        select(Purchase)
+        .where(Purchase.user_id == user_id)
+        .options(selectinload(Purchase.order).selectinload(Order.order_items))
+        .order_by(Purchase.purchased_at.desc())
         .offset(skip)
         .limit(limit)
     )
@@ -326,12 +358,12 @@ async def get_purchase_content(
     db: AsyncSession, user_id: int, order_id: int
 ) -> list[schemas.PurchaseContentRead]:
     result = await db.execute(
-        select(models.Purchase, models.Product)
-        .join(models.Product, models.Purchase.product_id == models.Product.id)
+        select(Purchase, Product)
+        .join(Product, Purchase.product_id == Product.id)
         .where(
             and_(
-                models.Purchase.user_id == user_id,
-                models.Purchase.order_id == order_id,
+                Purchase.user_id == user_id,
+                Purchase.order_id == order_id,
             )
         )
     )
@@ -351,10 +383,10 @@ async def has_user_purchased_product(
     db: AsyncSession, user_id: int, product_id: int
 ) -> bool:
     result = await db.execute(
-        select(models.Purchase).where(
+        select(Purchase).where(
             and_(
-                models.Purchase.user_id == user_id,
-                models.Purchase.product_id == product_id,
+                Purchase.user_id == user_id,
+                Purchase.product_id == product_id,
             )
         )
     )
@@ -364,27 +396,25 @@ async def has_user_purchased_product(
 # Review CRUD
 async def get_reviews_by_product(
     db: AsyncSession, product_id: int, skip: int = 0, limit: int = 100
-) -> list[models.Review]:
+) -> list[Review]:
     result = await db.execute(
-        select(models.Review)
-        .where(models.Review.product_id == product_id)
-        .order_by(models.Review.created_at.desc())
+        select(Review)
+        .where(Review.product_id == product_id)
+        .order_by(Review.created_at.desc())
         .offset(skip)
         .limit(limit)
     )
     return list(result.scalars().all())
 
 
-async def get_review_by_id(db: AsyncSession, review_id: int) -> Optional[models.Review]:
-    result = await db.execute(
-        select(models.Review).where(models.Review.id == review_id)
-    )
+async def get_review_by_id(db: AsyncSession, review_id: int) -> Optional[Review]:
+    result = await db.execute(select(Review).where(Review.id == review_id))
     return result.scalar_one_or_none()
 
 
 async def create_review(
     db: AsyncSession, review_in: schemas.ReviewCreate, user_id: int, product_id: int
-) -> models.Review:
+) -> Review:
     # Check if user has purchased the product
     has_purchased = await has_user_purchased_product(db, user_id, product_id)
     if not has_purchased:
@@ -395,10 +425,10 @@ async def create_review(
 
     # Check if review already exists
     existing = await db.execute(
-        select(models.Review).where(
+        select(Review).where(
             and_(
-                models.Review.user_id == user_id,
-                models.Review.product_id == product_id,
+                Review.user_id == user_id,
+                Review.product_id == product_id,
             )
         )
     )
@@ -408,9 +438,7 @@ async def create_review(
             detail="You have already reviewed this product",
         )
 
-    review = models.Review(
-        **review_in.model_dump(), user_id=user_id, product_id=product_id
-    )
+    review = Review(**review_in.model_dump(), user_id=user_id, product_id=product_id)
     db.add(review)
     try:
         await db.commit()
@@ -425,7 +453,7 @@ async def create_review(
 
 async def update_review(
     db: AsyncSession, review_id: int, review_in: schemas.ReviewUpdate, user_id: int
-) -> models.Review:
+) -> Review:
     review = await get_review_by_id(db, review_id)
     if review is None:
         raise HTTPException(
