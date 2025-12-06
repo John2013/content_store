@@ -36,6 +36,10 @@ class ProductCreate(ProductBase):
     pass
 
 
+class ProductCreateMultiple(BaseModel):
+    products: list[ProductCreate]
+
+
 class ProductUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None

@@ -86,6 +86,41 @@ def test_create_product_staff(staff_authorized_client, test_category, test_user)
     assert data["category_id"] == test_category.id
 
 
+def test_create_products_staff(staff_authorized_client, test_category):
+    """Test creating multiple products as staff user."""
+    products_data = {
+        "products": [
+            {
+                "title": "Product 1",
+                "description": "First test product",
+                "content_text": "Content of first product",
+                "price": 99.99,
+                "category_id": test_category.id,
+            },
+            {
+                "title": "Product 2",
+                "description": "Second test product",
+                "content_text": "Content of second product",
+                "price": 149.99,
+                "category_id": test_category.id,
+            },
+        ]
+    }
+
+    response = staff_authorized_client.post(
+        "/api/store/products/create-many", json=products_data
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+    assert data[0]["title"] == "Product 1"
+    assert data[1]["title"] == "Product 2"
+    assert data[0]["price"] == "99.99"
+    assert data[1]["price"] == "149.99"
+
+
 # Test cart functionality
 
 

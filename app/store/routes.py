@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.store import crud, schemas
-from app.user.routes import get_current_user, get_current_user_or_none
+from app.user.routes import get_current_user, get_current_user_or_none, require_staff
 from app.user import schemas as user_schemas
 
 router = APIRouter(prefix="/store", tags=["store"])
@@ -26,45 +26,30 @@ async def get_categories(
     "/categories",
     response_model=schemas.CategoryRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_staff)],
 )
 async def create_category(
     category_in: schemas.CategoryCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> schemas.CategoryRead:
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="You are not authorized to create categories",
-        )
-    if not current_user.is_staff:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to create categories",
-        )
     category = await crud.create_category(
         db, category_in=category_in, current_user=current_user
     )
     return schemas.CategoryRead.model_validate(category)
 
 
-@router.delete("/categories", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/categories",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_staff)],
+)
 async def delete_category(
     category_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> None:
     """Delete own category. Requires authentication."""
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="You are not authorized to delete categories",
-        )
-    if not current_user or not current_user.is_staff:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to delete categories",
-        )
     await crud.delete_category(db, category_id=category_id, current_user=current_user)
 
 
@@ -72,6 +57,7 @@ async def delete_category(
     "/products",
     response_model=schemas.ProductRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_staff)],
 )
 async def create_product(
     product_in: schemas.ProductCreate,
@@ -79,23 +65,35 @@ async def create_product(
     current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> schemas.ProductRead:
     """Create a new product. Requires staff privileges."""
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="You are not authorized to create products",
-        )
-    if not current_user.is_staff:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to create products",
-        )
     product = await crud.create_product(db, product_in=product_in)
     return schemas.ProductRead.model_validate(product)
+
+
+@router.post(
+    "/products/create-many",
+    response_model=list[schemas.ProductRead],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_staff)],
+)
+async def create_products(
+    products_in: schemas.ProductCreateMultiple,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: user_schemas.UserRead = Depends(get_current_user),
+) -> list[schemas.ProductRead]:
+    """Create multiple products at once. Requires staff privileges."""
+
+    created_products = []
+    for product_data in products_in.products:
+        product = await crud.create_product(db, product_in=product_data)
+        created_products.append(schemas.ProductRead.model_validate(product))
+
+    return created_products
 
 
 @router.delete(
     "/products/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_staff)],
 )
 async def delete_product(
     product_id: int,
@@ -103,16 +101,6 @@ async def delete_product(
     current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> None:
     """Delete a product. Requires staff privileges."""
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="You are not authorized to delete products",
-        )
-    if not current_user.is_staff:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to delete products",
-        )
     await crud.delete_product(db, product_id=product_id)
 
 
