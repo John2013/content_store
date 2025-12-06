@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Sequence
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, and_, or_, delete
@@ -407,6 +407,15 @@ async def get_reviews_by_product(
     return list(result.scalars().all())
 
 
+async def get_reviews(
+    db: AsyncSession, skip: int = 0, limit: int = 100
+) -> Sequence[Review]:
+    result = await db.execute(
+        select(Review).order_by(Review.created_at.desc()).offset(skip).limit(limit)
+    )
+    return result.scalars().all()
+
+
 async def get_review_by_id(db: AsyncSession, review_id: int) -> Optional[Review]:
     result = await db.execute(select(Review).where(Review.id == review_id))
     return result.scalar_one_or_none()
@@ -473,16 +482,7 @@ async def update_review(
     return review
 
 
-async def delete_review(db: AsyncSession, review_id: int, user_id: int) -> None:
-    review = await get_review_by_id(db, review_id)
-    if review is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Review not found"
-        )
-    if review.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only delete your own reviews",
-        )
-    await db.delete(review)
+async def delete_review(db: AsyncSession, review_id: int) -> None:
+    result = await db.execute(delete(Review).where(Review.id == review_id))
     await db.commit()
+    return result.rowcount > 0

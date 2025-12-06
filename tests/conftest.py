@@ -20,6 +20,7 @@ from app.store.models import (
     Order,
     OrderItem,
     Purchase,
+    Review,
 )
 from decimal import Decimal
 from datetime import datetime, timedelta
@@ -225,3 +226,20 @@ async def test_purchase(
     await db_session.commit()
     await db_session.refresh(purchase)
     return purchase
+
+
+@pytest_asyncio.fixture(scope="function")
+async def test_review(
+    db_session: AsyncSession,
+    test_user: User,
+    test_product: Product,
+    test_purchase: Purchase,
+) -> Review:
+    """Create a test review."""
+    review = Review(
+        user=test_user, product=test_product, rating=5, comment="Great product!"
+    )
+    db_session.add(review)
+    await db_session.commit()
+    await db_session.refresh(review)
+    return review

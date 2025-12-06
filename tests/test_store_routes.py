@@ -1,3 +1,4 @@
+import pytest
 from fastapi import status
 
 
@@ -188,6 +189,73 @@ def test_create_review(authorized_client, test_product, test_purchase):
     assert data["rating"] == 5
     assert data["comment"] == "Great product!"
     assert data["product_id"] == test_product.id
+
+
+def test_get_reviews_staff_unauthorized(client, test_review):
+    """Test getting all reviews without authentication - should be unauthorized."""
+    response = client.get("/api/store/reviews")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_get_reviews_staff_unauthorized_like_staff(authorized_client, test_review):
+    """Test getting all reviews as non-staff user - should be forbidden."""
+    response = authorized_client.get("/api/store/reviews")
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_get_reviews_staff(staff_authorized_client, test_review):
+    """Test staff user getting all reviews."""
+    response = staff_authorized_client.get("/api/store/reviews")
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    assert any(r["id"] == test_review.id for r in data)
+
+
+def test_get_reviews_by_product(staff_authorized_client, test_review):
+    """Test getting reviews filtered by product."""
+    response = staff_authorized_client.get(
+        f"/api/store/reviews?product_id={test_review.product_id}"
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    assert data[0]["product_id"] == test_review.product_id
+
+
+def test_delete_review_own(authorized_client, test_review):
+    """Test deleting own review as regular user."""
+    response = authorized_client.delete(f"/api/store/reviews/{test_review.id}")
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+
+
+@pytest.mark.asyncio
+async def test_delete_review_other_unauthorized(
+    authorized_client, test_review, test_staff_user, db_session
+):
+    """Test deleting another user's review as regular user - should fail."""
+    # Create review by staff user
+    from app.store.models import Review
+
+    new_review = Review(
+        user_id=test_staff_user.id,
+        product_id=test_review.product_id,
+        rating=4,
+        comment="Staff review",
+    )
+    db_session.add(new_review)
+    await db_session.commit()
+
+    response = authorized_client.delete(f"/api/store/reviews/{new_review.id}")
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_delete_review_staff(staff_authorized_client, test_review):
+    """Test staff user deleting any review."""
+    response = staff_authorized_client.delete(f"/api/store/reviews/{test_review.id}")
+    assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
 # Test purchases

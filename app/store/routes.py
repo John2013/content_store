@@ -13,7 +13,9 @@ router = APIRouter(prefix="/store", tags=["store"])
 
 
 # Public endpoints
-@router.get("/categories", response_model=list[schemas.CategoryRead])
+@router.get(
+    "/categories", response_model=list[schemas.CategoryRead], tags=["Categories"]
+)
 async def get_categories(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[schemas.CategoryRead]:
@@ -27,6 +29,7 @@ async def get_categories(
     response_model=schemas.CategoryRead,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_staff)],
+    tags=["Categories"],
 )
 async def create_category(
     category_in: schemas.CategoryCreate,
@@ -43,6 +46,7 @@ async def create_category(
     "/categories",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_staff)],
+    tags=["Categories"],
 )
 async def delete_category(
     category_id: int,
@@ -58,6 +62,7 @@ async def delete_category(
     response_model=schemas.ProductRead,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_staff)],
+    tags=["Products"],
 )
 async def create_product(
     product_in: schemas.ProductCreate,
@@ -74,6 +79,7 @@ async def create_product(
     response_model=list[schemas.ProductRead],
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_staff)],
+    tags=["Products"],
 )
 async def create_products(
     products_in: schemas.ProductCreateMultiple,
@@ -94,6 +100,7 @@ async def create_products(
     "/products/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_staff)],
+    tags=["Products"],
 )
 async def delete_product(
     product_id: int,
@@ -104,7 +111,7 @@ async def delete_product(
     await crud.delete_product(db, product_id=product_id)
 
 
-@router.get("/products", response_model=list[schemas.ProductRead])
+@router.get("/products", response_model=list[schemas.ProductRead], tags=["Products"])
 async def get_products(
     db: Annotated[AsyncSession, Depends(get_db)],
     category_id: Optional[int] = Query(None, description="Filter by category ID"),
@@ -118,7 +125,11 @@ async def get_products(
     return [schemas.ProductRead.model_validate(p) for p in products]
 
 
-@router.get("/products/{product_id}", response_model=schemas.ProductDetailRead)
+@router.get(
+    "/products/{product_id}",
+    response_model=schemas.ProductDetailRead,
+    tags=["Products"],
+)
 async def get_product(
     product_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -132,7 +143,11 @@ async def get_product(
     return schemas.ProductDetailRead.model_validate(product)
 
 
-@router.get("/products/{product_id}/reviews", response_model=list[schemas.ReviewRead])
+@router.get(
+    "/products/{product_id}/reviews",
+    response_model=list[schemas.ReviewRead],
+    tags=["Products", "Reviews"],
+)
 async def get_product_reviews(
     product_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -151,7 +166,7 @@ async def get_product_reviews(
 
 
 # Cart endpoints (no auth required, but session_id needed)
-@router.get("/cart", response_model=list[schemas.CartItemRead])
+@router.get("/cart", response_model=list[schemas.CartItemRead], tags=["Carts"])
 async def get_cart(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: user_schemas.UserRead | None = Depends(get_current_user),
@@ -171,7 +186,10 @@ async def get_cart(
 
 
 @router.post(
-    "/cart", response_model=schemas.CartItemRead, status_code=status.HTTP_201_CREATED
+    "/cart",
+    response_model=schemas.CartItemRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Carts"],
 )
 async def add_to_cart(
     item_in: schemas.CartItemCreate,
@@ -196,7 +214,9 @@ async def add_to_cart(
     return schemas.CartItemRead.model_validate(cart_item)
 
 
-@router.delete("/cart/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/cart/{item_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Carts"]
+)
 async def remove_from_cart(
     item_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -205,7 +225,7 @@ async def remove_from_cart(
     await crud.remove_from_cart(db, item_id)
 
 
-@router.delete("/cart", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/cart", status_code=status.HTTP_204_NO_CONTENT, tags=["Carts"])
 async def clear_cart(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: user_schemas.UserRead = Depends(get_current_user),
@@ -225,7 +245,10 @@ async def clear_cart(
 
 # Order endpoints (require authentication)
 @router.post(
-    "/orders", response_model=schemas.OrderRead, status_code=status.HTTP_201_CREATED
+    "/orders",
+    response_model=schemas.OrderRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Orders"],
 )
 async def create_order(
     order_in: schemas.OrderCreate,
@@ -239,7 +262,7 @@ async def create_order(
     return schemas.OrderRead.model_validate(order)
 
 
-@router.get("/orders", response_model=list[schemas.OrderRead])
+@router.get("/orders", response_model=list[schemas.OrderRead], tags=["Orders"])
 async def get_orders(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: user_schemas.UserRead = Depends(get_current_user),
@@ -253,7 +276,7 @@ async def get_orders(
     return [schemas.OrderRead.model_validate(o) for o in orders]
 
 
-@router.get("/orders/{order_id}", response_model=schemas.OrderRead)
+@router.get("/orders/{order_id}", response_model=schemas.OrderRead, tags=["Orders"])
 async def get_order(
     order_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -273,7 +296,9 @@ async def get_order(
     return schemas.OrderRead.model_validate(order)
 
 
-@router.post("/orders/{order_id}/pay", response_model=schemas.OrderRead)
+@router.post(
+    "/orders/{order_id}/pay", response_model=schemas.OrderRead, tags=["Orders"]
+)
 async def pay_order(
     order_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -303,7 +328,7 @@ async def pay_order(
 
 
 # Purchase endpoints (require authentication)
-@router.get("/purchases", response_model=list[schemas.PurchaseRead])
+@router.get("/purchases", response_model=list[schemas.PurchaseRead], tags=["Purchases"])
 async def get_purchases(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: user_schemas.UserRead = Depends(get_current_user),
@@ -318,7 +343,9 @@ async def get_purchases(
 
 
 @router.get(
-    "/purchases/{order_id}/content", response_model=list[schemas.PurchaseContentRead]
+    "/purchases/{order_id}/content",
+    response_model=list[schemas.PurchaseContentRead],
+    tags=["Purchases"],
 )
 async def get_purchase_content(
     order_id: int,
@@ -349,10 +376,25 @@ async def get_purchase_content(
     return content
 
 
+@router.get(
+    "/reviews",
+    response_model=list[schemas.ReviewRead],
+    tags=["Reviews"],
+    dependencies=[Depends(require_staff)],
+)
+async def get_reviews(
+    db: Annotated[AsyncSession, Depends(get_db)], skip: int = 0, limit: int = 100
+) -> list[schemas.ReviewRead]:
+    """Get all reviews. Requires staff access."""
+    reviews = await crud.get_reviews(db, skip=skip, limit=limit)
+    return [schemas.ReviewRead.model_validate(review) for review in reviews]
+
+
 # Review endpoints (require authentication)
 @router.post(
     "/products/{product_id}/reviews",
     response_model=schemas.ReviewRead,
+    tags=["Reviews"],
     status_code=status.HTTP_201_CREATED,
 )
 async def create_review(
@@ -375,7 +417,11 @@ async def create_review(
     return schemas.ReviewRead.model_validate(review)
 
 
-@router.put("/reviews/{review_id}", response_model=schemas.ReviewRead)
+@router.put(
+    "/reviews/{review_id}",
+    response_model=schemas.ReviewRead,
+    tags=["Reviews"],
+)
 async def update_review(
     review_id: int,
     review_in: schemas.ReviewUpdate,
@@ -389,11 +435,27 @@ async def update_review(
     return schemas.ReviewRead.model_validate(review)
 
 
-@router.delete("/reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/reviews/{review_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Reviews"],
+)
 async def delete_review(
     review_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: user_schemas.UserRead = Depends(get_current_user),
 ) -> None:
-    """Delete own review. Requires authentication."""
-    await crud.delete_review(db, review_id=review_id, user_id=current_user.id)
+    """Delete a review. Requires authentication and staff privileges for admin deletion."""
+    review = await crud.get_review_by_id(db, review_id)
+    if review is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Review not found"
+        )
+
+    if review.user_id != current_user.id and not current_user.is_staff:
+        raise HTTPException(
+            status_code=403, detail="You can only delete your own reviews"
+        )
+
+    # Delete review as staff
+    await crud.delete_review(db, review_id=review_id)
